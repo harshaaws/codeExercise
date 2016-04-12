@@ -1,0 +1,246 @@
+{
+	"AWSTemplateFormatVersion" : "2010-09-09",
+	"Description" : "MySQL DB Instance",
+	"Mappings" : {
+	  "params" : {
+			"BackupRetentionPeriod" : {
+				"test" : "1",
+				"preprod" : "7",
+				"prod" : "7"
+			},
+			"DBInstanceClass" : {
+				"test" : "db.m3.medium",
+				"preprod" : "db.m3.medium",
+				"prod" : "db.m3.medium"
+			},
+			"DBSubnetGroupName" : {
+				"test" : "codex",
+				"preprod" : "codex",
+				"prod" : "codex"
+			},
+			"Engine" : {
+				"test" : "MySQL",
+				"preprod" : "MySQL",
+				"prod" : "MySQL"
+			},
+			"EngineVersion" : {
+				"test" : "5.6",
+				"preprod" : "5.6",
+				"prod" : "5.6"
+			},
+			"LicenseModel" : {
+				"test" : "general-public-license",
+				"preprod" : "general-public-license",
+				"prod" : "general-public-license"
+			},
+			"MultiAZ" : {
+				"test" : [ "false" ],
+				"preprod" : [ "true" ],
+				"prod" : [ "true" ]
+			},
+			"Port" : {
+				"test" : "3306",
+				"preprod" : "3306",
+				"prod" : "3306"
+			},
+			"SNSOpsNotifyTopic" : {
+				"test" : "arn:aws:sns:us-east-1:328452957997:codeexercise",
+				"preprod" : "arn:aws:sns:us-east-1:328452957997:codeexercise",
+				"prod" : "arn:aws:sns:us-east-1:328452957997:codeexercise"
+			},
+			"VPCSecurityGroups" : {
+				"test" : [ "sg-d884b9a0" ],
+				"preprod" : [ "sg-d884b9a0" ],
+				"prod" : [ "sg-d884b9a0" ]
+			}
+		}
+	},
+  "Parameters": {
+	"AppName": {
+	  "Description": "What app will this resource be for?",
+	  "Type": "String",
+	  "Default" : "CODEXRDS"
+	},
+	"DBName": {
+	  "Description": "Database name. First character must be a letter.",
+	  "Type": "String",
+	  "Default": "codeexercise"
+	},
+	"EnvironmentName": {
+	  "Description": "What is the environment name of this specifc environment type (envtype(envname) ex:dev1)?",
+	  "Type": "String",
+	  "Default": "DEV"
+
+	},
+	"EnvironmentType": {
+	  "Description": "What environment type is it (test, preprod, prod)?",
+	  "Type": "String",
+	  "Default": "test",
+	  "AllowedValues": [
+		"test",
+		"preprod",
+		"prod"
+	  ]
+	},
+	"MasterUsername": {
+	  "Description": "Database administration name. First character must be a letter.",
+	  "Type": "String",
+	  "Default": "codex"
+	},
+	"MasterUserPassword": {
+	  "Description": "Database administration password. Minimum of 8 alphanumeric characters.",
+	  "NoEcho": "true",
+	  "Type": "String",
+	  "Default": "password1",
+	  "MinLength" : "8",
+	  "AllowedPattern" : "[a-zA-Z0-9]*",
+	  "ConstraintDescription" : "Must only contain upper and lowercase letters and numbers"
+	},
+	"OwnerContact": {
+	  "Description": "Name of the Owner.",
+	  "Type": "String",
+	  "Default" : "Harsha"
+	}
+  },
+  "Resources": {
+	"RDS": {
+	  "Type": "AWS::RDS::DBInstance",
+	  "DeletionPolicy" : "Snapshot",
+	  "Properties": {
+		"AllocatedStorage": "5",
+		"AllowMajorVersionUpgrade": "false",
+		"AutoMinorVersionUpgrade": "true",
+		"BackupRetentionPeriod": "35",
+		"DBInstanceClass": {
+		  "Fn::FindInMap": [
+			"params",
+			"DBInstanceClass",
+			{
+			  "Ref": "EnvironmentType"
+			}
+		  ]
+		},
+		"DBInstanceIdentifier": {
+		  "Fn::Join": [
+			"-",
+			[
+			  {
+				"Ref": "AppName"
+			  },
+			  {
+				"Ref": "EnvironmentName"
+			  },
+			  "MySQL-rds"
+			]
+		  ]
+		},
+		"DBName": {
+		  "Ref": "DBName"
+		},
+		"DBSubnetGroupName": {
+		  "Fn::FindInMap": [
+			"params",
+			"DBSubnetGroupName",
+			{
+			  "Ref": "EnvironmentType"
+			}
+		  ]
+		},
+		"Engine": {
+		  "Fn::FindInMap": [
+			"params",
+			"Engine",
+			{
+			  "Ref": "EnvironmentType"
+			}
+		  ]
+		},
+		"EngineVersion": {
+		  "Fn::FindInMap": [
+			"params",
+			"EngineVersion",
+			{
+			  "Ref": "EnvironmentType"
+			}
+		  ]
+		},
+		"LicenseModel": {
+		  "Fn::FindInMap": [
+			"params",
+			"LicenseModel",
+			{
+			  "Ref": "EnvironmentType"
+			}
+		  ]
+		},
+		"MasterUsername": {
+		  "Ref": "MasterUsername"
+		},
+		"MasterUserPassword": {
+		  "Ref": "MasterUserPassword"
+		},
+		"MultiAZ": "true",
+		"Port": {
+		  "Fn::FindInMap": [
+			"params",
+			"Port",
+			{
+			  "Ref": "EnvironmentType"
+			}
+		  ]
+		},
+		"PreferredBackupWindow": "03:00-05:00",
+		"PreferredMaintenanceWindow": "Sun:05:00-Sun:11:00",
+		"PubliclyAccessible": "false",
+		"StorageEncrypted": "true",
+		"StorageType": "gp2",
+		"VPCSecurityGroups": {
+		  "Fn::FindInMap": [
+			"params",
+			"VPCSecurityGroups",
+			{
+			  "Ref": "EnvironmentType"
+			}
+		  ]
+		},
+		"Tags" : [
+		  {
+			"Key" : "SNSTopicARN",
+			"Value" : { "Fn::FindInMap" : [ "params", "SNSOpsNotifyTopic", { "Ref" : "EnvironmentType" } ] }
+		  },
+		  {
+			"Key" : "Name",
+			"Value" : { "Ref" : "AWS::StackName" }
+		  },
+		  {
+		  	"Key": "OwnerContact",
+			"Value": {
+				"Ref": "OwnerContact"
+			}
+		  }
+
+		]
+	  }
+	}
+  },
+  "Outputs": {
+	"RDSEndpoint": {
+	  "Description": "The endpoint of the production RDS instance.",
+	  "Value": {
+		"Fn::GetAtt": [
+		  "RDS",
+		  "Endpoint.Address"
+		]
+	  }
+	},
+	"RDSPort": {
+	  "Description": "The port the production RDS instance accepts connections on.",
+	  "Value": {
+		"Fn::GetAtt": [
+		  "RDS",
+		  "Endpoint.Port"
+		]
+	  }
+	}
+  }
+}

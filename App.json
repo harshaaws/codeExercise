@@ -1,0 +1,499 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "Application",
+    "Conditions": {
+        "Scheduler": {
+            "Fn::Equals": [
+                {
+                    "Ref": "Scheduler"
+                },
+                "true"
+            ]
+        }
+    },
+    "Mappings": {
+        "params": {
+            "ImageId": {
+                "test": "ami-2051294a",
+                "preprod": "ami-2051294a",
+                "prod": "ami-2051294a"
+            },
+			"ChefOrganization": {
+                "test": "test",
+                "preprod": "preprod",
+                "prod": "prod"
+            },
+            "ChefRole": {
+                "test": "harsha",
+                "preprod": "harsha",
+                "prod": "harsha"
+            },
+            "ChefServer": {
+                "test": "developer",
+                "preprod": "developer",
+                "prod": "developer"
+            },
+            "InstanceType": {
+                "test": "t2.micro",
+                "preprod": "t2.micro",
+                "prod": "t2.micro"
+            },
+            "MaxCapacity": {
+                "test": "4",
+                "preprod": "2",
+                "prod": "9"
+            },
+            "MinCapacity": {
+                "test": "2",
+                "preprod": "1",
+                "prod": "3"
+            },
+            "SecurityGroups": {
+                "test": [
+                    "sg-d884b9a0"
+                    
+                ],
+                "preprod": [
+                    "sg-d884b9a0"
+                ],
+                "prod": [
+                    "sg-d884b9a0"
+                ]
+            },
+            "SNSAppNotifyTopic": {
+                "test": "arn:aws:sns:us-east-1:328452957997:codeexercise",
+                "preprod": "arn:aws:sns:us-east-1:328452957997:codeexercise",
+                "prod": "arn:aws:sns:us-east-1:328452957997:codeexercise"
+            },
+            "SNSOpsNotifyTopic": {
+                "test": "arn:aws:sns:us-east-1:328452957997:codeexercise",
+                "preprod": "arn:aws:sns:us-east-1:328452957997:codeexercise",
+                "prod": "arn:aws:sns:us-east-1:328452957997:codeexercise"
+            },
+            
+            "Subnets": {
+                "test": [
+                    "subnet-e577d9cf"
+                ],
+                "preprod": [
+                    "subnet-e577d9cf"
+                ],
+                "prod": [
+                    "subnet-e577d9cf"
+                ]
+            }
+        }
+    },
+    "Parameters": {
+        "AppName": {
+            "Description": "What app will this resource be for?",
+            "Type": "String",
+            "Default": "Codex"
+        },
+        "ELBName": {
+            "Description": "What ELB should this instance group connect to (appname-envname-tier-elb)?",
+            "Type": "String",
+            "Default": "ELBCODEX"
+        },
+        "EnvironmentName": {
+            "Description": "What is the environment name of this specifc environment type (envtype(envname) ex:dev1)?",
+            "Type": "String",
+            "Default": "DEV"
+        },
+        "EnvironmentType": {
+            "Description": "What environment type is it (test, preprod, prod)?",
+            "Type": "String",
+            "Default": "test",
+            "AllowedValues": [
+                "test",
+                "preprod",
+                "prod"
+            ]
+        },
+        "KeyName": {
+            "Description": "What key file should be used for the instances?",
+            "Type": "AWS::EC2::KeyPair::KeyName",
+            "Default": "codeexercise"
+        },
+        "OwnerContact": {
+            "Description": "Name of the owner.",
+            "Type": "String",
+            "Default": "Harsha"
+        },
+        "Scheduler": {
+            "Description": "Should this stack be turned off at night?",
+            "Type": "String",
+            "Default": "false",
+            "AllowedValues": [
+                "false",
+                "true"
+            ]
+        }
+    },
+    "Resources": {
+        "AlarmEC2HighCPU": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmActions": [
+                    {
+                        "Ref": "ScalingPolicyASGUp"
+                    }
+                ],
+                "AlarmDescription": "Scale up if CPU > 70% average over 5 minutes",
+                "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+                "Dimensions": [
+                    {
+                        "Name": "AutoScalingGroupName",
+                        "Value": {
+                            "Ref": "AutoScalingGroup"
+                        }
+                    }
+                ],
+                "EvaluationPeriods": "1",
+                "MetricName": "CPUUtilization",
+                "Namespace": "AWS/EC2",
+                "Period": "300",
+                "Statistic": "Average",
+                "Threshold": "70"
+            }
+        },
+        "AlarmEC2LowCPU": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmActions": [
+                    {
+                        "Ref": "ScalingPolicyASGDown"
+                    }
+                ],
+                "AlarmDescription": "Scale-down if CPU < 70% for 10 minutes",
+                "ComparisonOperator": "LessThanOrEqualToThreshold",
+                "Dimensions": [
+                    {
+                        "Name": "AutoScalingGroupName",
+                        "Value": {
+                            "Ref": "AutoScalingGroup"
+                        }
+                    }
+                ],
+                "EvaluationPeriods": "1",
+                "MetricName": "CPUUtilization",
+                "Namespace": "AWS/EC2",
+                "Period": "600",
+                "Statistic": "Average",
+                "Threshold": "70"
+            }
+        },
+        "AlarmEC2StatusCheck": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmActions": [
+                    {
+                        "Fn::FindInMap": [
+                            "params",
+                            "SNSAppNotifyTopic",
+                            {
+                                "Ref": "EnvironmentType"
+                            }
+                        ]
+                    },
+                    {
+                        "Fn::FindInMap": [
+                            "params",
+                            "SNSOpsNotifyTopic",
+                            {
+                                "Ref": "EnvironmentType"
+                            }
+                        ]
+                    }
+                ],
+                "AlarmDescription": "System status check failed",
+                "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+                "Dimensions": [
+                    {
+                        "Name": "AutoScalingGroup",
+                        "Value": {
+                            "Ref": "AutoScalingGroup"
+                        }
+                    }
+                ],
+                "EvaluationPeriods": "1",
+                "MetricName": "StatusCheckFailed",
+                "Namespace": "AWS/EC2",
+                "Period": "300",
+                "Statistic": "Maximum",
+                "Threshold": "1"
+            }
+        },
+        "AutoScalingGroup": {
+            "Type": "AWS::AutoScaling::AutoScalingGroup",
+            "Properties": {
+                "DesiredCapacity": {
+                    "Fn::FindInMap": [
+                        "params",
+                        "MinCapacity",
+                        {
+                            "Ref": "EnvironmentType"
+                        }
+                    ]
+                },
+                "HealthCheckType": "EC2",
+                "LaunchConfigurationName": {
+                    "Ref": "LaunchConfiguration"
+                },
+                "LoadBalancerNames": [
+                    {
+                        "Ref": "ELBName"
+                    }
+                ],
+                "MaxSize": {
+                    "Fn::FindInMap": [
+                        "params",
+                        "MaxCapacity",
+                        {
+                            "Ref": "EnvironmentType"
+                        }
+                    ]
+                },
+                "MinSize": {
+                    "Fn::FindInMap": [
+                        "params",
+                        "MinCapacity",
+                        {
+                            "Ref": "EnvironmentType"
+                        }
+                    ]
+                },
+                "NotificationConfiguration": {
+                    "NotificationTypes": [
+                        "autoscaling:EC2_INSTANCE_LAUNCH",
+                        "autoscaling:EC2_INSTANCE_LAUNCH_ERROR",
+                        "autoscaling:EC2_INSTANCE_TERMINATE",
+                        "autoscaling:EC2_INSTANCE_TERMINATE_ERROR"
+                    ],
+                    "TopicARN": {
+                        "Fn::FindInMap": [
+                            "params",
+                            "SNSAppNotifyTopic",
+                            {
+                                "Ref": "EnvironmentType"
+                            }
+                        ]
+                    }
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "PropagateAtLaunch": "true",
+                        "Value": {
+                            "Fn::Join": [
+                                "-",
+                                [
+                                    {
+                                        "Ref": "AppName"
+                                    },
+                                    {
+                                        "Ref": "EnvironmentName"
+                                    },
+                                    "app"
+                                ]
+                            ]
+                        }
+                    },
+                    {
+                        "Key": "OwnerContact",
+                        "PropagateAtLaunch": "true",
+                        "Value": {
+                            "Ref": "OwnerContact"
+                        }
+                    },
+                    {
+                        "Key": "SNSTopicARN",
+                        "PropagateAtLaunch": "true",
+                        "Value": {
+                            "Fn::FindInMap": [
+                                "params",
+                                "SNSOpsNotifyTopic",
+                                {
+                                    "Ref": "EnvironmentType"
+                                }
+                            ]
+                        }
+                    }
+                ],
+                "VPCZoneIdentifier": {
+                    "Fn::FindInMap": [
+                        "params",
+                        "Subnets",
+                        {
+                            "Ref": "EnvironmentType"
+                        }
+                    ]
+                }
+            },
+            "UpdatePolicy": {
+                "AutoScalingRollingUpdate": {
+                    "MaxBatchSize": "1",
+                    "MinInstancesInService": "1",
+                    "PauseTime": "PT5M"
+                }
+            }
+        },
+        "LaunchConfiguration": {
+            "Type": "AWS::AutoScaling::LaunchConfiguration",
+            "Properties": {
+                "ImageId": {
+                    "Fn::FindInMap": [
+                        "params",
+                        "ImageId",
+                        {
+                            "Ref": "EnvironmentType"
+                        }
+                    ]
+                },
+                "InstanceType": {
+                    "Fn::FindInMap": [
+                        "params",
+                        "InstanceType",
+                        {
+                            "Ref": "EnvironmentType"
+                        }
+                    ]
+                },
+                "KeyName": {
+                    "Ref": "KeyName"
+                },
+                "SecurityGroups": {
+                    "Fn::FindInMap": [
+                        "params",
+                        "SecurityGroups",
+                        {
+                            "Ref": "EnvironmentType"
+                        }
+                    ]
+                },
+                "UserData": {
+                    "Fn::Base64": {
+                        "Fn::Join": [
+                            "\n",
+                            [
+                                "#!/bin/bash -v",
+                                {
+                                    "Fn::Join": [
+                                        " ",
+                                        [
+                                            {
+                                                "Fn::FindInMap": [
+                                                    "params",
+                                                    "ChefServer",
+                                                    {
+                                                        "Ref": "EnvironmentType"
+                                                    }
+                                                ]
+                                            },
+                                            {
+                                                "Fn::FindInMap": [
+                                                    "params",
+                                                    "ChefOrganization",
+                                                    {
+                                                        "Ref": "EnvironmentType"
+                                                    }
+                                                ]
+                                            },
+                                            "aws",
+                                            {
+                                                "Fn::Join": [
+                                                    "",
+                                                    [
+                                                        "role[",
+                                                        {
+                                                            "Fn::FindInMap": [
+                                                                "params",
+                                                                "ChefRole",
+                                                                {
+                                                                    "Ref": "EnvironmentType"
+                                                                }
+                                                            ]
+                                                        },
+                                                        "]"
+                                                    ]
+                                                ]
+                                            },
+                                            {
+                                                "Ref": "EnvironmentType"
+                                            }
+                                        ]
+                                    ]
+                                },
+                            ]
+                        ]
+                    }
+                }
+            }
+        },
+        "ScalingPolicyASGDown": {
+            "Type": "AWS::AutoScaling::ScalingPolicy",
+            "Properties": {
+                "AdjustmentType": "ChangeInCapacity",
+                "AutoScalingGroupName": {
+                    "Ref": "AutoScalingGroup"
+                },
+                "Cooldown": "600",
+                "ScalingAdjustment": "-1"
+            }
+        },
+        "ScalingPolicyASGUp": {
+            "Type": "AWS::AutoScaling::ScalingPolicy",          
+            "Properties": {
+                "AdjustmentType": "ChangeInCapacity",
+                "AutoScalingGroupName": {
+                    "Ref": "AutoScalingGroup"
+                },
+                "Cooldown": "600",
+                "ScalingAdjustment": "2"
+            }
+        },
+        "ScheduledActionASGDown": {
+            "Type": "AWS::AutoScaling::ScheduledAction",
+            "Condition": "Scheduler",
+            "Properties": {
+                "AutoScalingGroupName": {
+                    "Ref": "AutoScalingGroup"
+                },
+                "MaxSize": "0",
+                "MinSize": "0",
+                "Recurrence": "0 1 * * 1-5"
+            }
+        },
+        "ScheduledActionASGUp": {
+            "Type": "AWS::AutoScaling::ScheduledAction",
+            "Condition": "Scheduler",
+            "Properties": {
+                "AutoScalingGroupName": {
+                    "Ref": "AutoScalingGroup"
+                },
+                "MaxSize": "1",
+                "MinSize": "1",
+                "Recurrence": "0 12 * * 1-5"
+            }
+        }
+    },
+    "Outputs": {
+        "EC2InstanceName": {
+            "Description": "Name of EC2 instances created",
+            "Value": {
+                "Fn::Join": [
+                    "-",
+                    [
+                        {
+                            "Ref": "AppName"
+                        },
+                        {
+                            "Ref": "EnvironmentName"
+                        },
+                        "app"
+                    ]
+                ]
+            }
+        }
+    }
+}
